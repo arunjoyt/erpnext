@@ -200,18 +200,28 @@ def get_items(start, page_length, price_list, item_group, pos_profile, search_te
 	for item in items_data:
 		item.actual_qty, _ = get_stock_availability(item.item_code, warehouse)
 
-		item_prices = frappe.get_all(
-			"Item Price",
-			fields=["price_list_rate", "currency", "uom", "batch_no", "valid_from", "valid_upto"],
-			filters={
-				"price_list": price_list,
-				"item_code": item.item_code,
-				"selling": True,
-				"valid_from": ["<=", current_date],
-				"valid_upto": ["in", [None, "", current_date]],
-			},
-			order_by="valid_from desc",
-		)
+		item_prices = frappe.db.sql(
+            """
+			SELECT 
+				price_list_rate, currency, uom, batch_no, valid_from, valid_upto
+			FROM
+				`tabItem Price`
+			WHERE
+				price_list = %(price_list)s 
+				AND item_code = %(item_code)s
+				AND selling = 1
+				AND valid_from <= %(current_date)s
+				AND COALESCE(valid_upto, %(current_date)s) >= %(current_date)s
+			ORDER BY 
+				valid_from DESC
+			""",
+            {
+                "price_list": price_list,
+                "item_code": item.item_code,
+                "current_date": current_date,
+            },
+            as_dict=True,
+        )
 
 		stock_uom_price = next((d for d in item_prices if d.get("uom") == item.stock_uom), {})
 		item_uom = item.stock_uom
